@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Satélite Agrícola</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Sora:wght@400;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --green-bright: #4ade80;
+      --green-dim: #22c55e;
+      --green-dark: #0f3d0f;
+      --green-deep: #163d16;
+      --bg: #0b160b;
+      --panel: #111c11;
+      --panel2: #162016;
+      --border: rgba(74,222,128,0.18);
+      --text: #d4f0d4;
+      --text-dim: #7fa87f;
+      --font-ui: 'Sora', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--font-ui); }
+
+    /* ── TOPBAR ── */
+    #topbar {
+      position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 2000;
+      background: var(--green-dark);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 14px; padding: 0 18px;
+    }
+    .logo { color: var(--green-bright); font-size: 14px; font-weight: 600; letter-spacing: 0.03em; white-space: nowrap; }
+    .logo span { color: var(--text-dim); font-weight: 400; }
+
+    .tabs { display: flex; gap: 4px; margin-left: auto; }
+    .tab {
+      padding: 5px 14px; border-radius: 20px;
+      border: 1px solid transparent;
+      background: transparent; color: var(--text-dim);
+      font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; letter-spacing: 0.04em;
+    }
+    .tab:hover { color: var(--green-bright); border-color: var(--border); }
+    .tab.active { background: rgba(74,222,128,0.15); color: var(--green-bright); border-color: rgba(74,222,128,0.4); }
+
+    .loc-btn {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 14px; border-radius: 20px;
+      background: var(--green-dim); color: #0b160b;
+      border: none; font-family: var(--font-ui); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: all 0.2s; white-space: nowrap;
+    }
+    .loc-btn:hover { background: var(--green-bright); transform: scale(1.03); }
+    .loc-btn svg { width: 14px; height: 14px; }
+
+    /* ── LAYOUT ── */
+    #app {
+      position: fixed; top: 52px; left: 0; right: 0; bottom: 0;
+      display: flex;
+    }
+
+    /* ── MAP ── */
+    #map-wrap {
+      flex: 1; position: relative; overflow: hidden;
+    }
+    #map { width: 100%; height: 100%; }
+
+    .map-fab {
+      position: absolute; z-index: 1000;
+      display: flex; flex-direction: column; gap: 6px;
+      right: 12px; top: 12px;
+    }
+    .fab {
+      width: 38px; height: 38px; border-radius: 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      color: var(--green-bright); font-size: 17px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .fab:hover { background: var(--panel2); }
+
+    .map-hint {
+      position: absolute; z-index: 1000;
+      bottom: 14px; left: 50%; transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 20px; padding: 6px 14px;
+      font-size: 11px; color: var(--text-dim);
+      pointer-events: none; white-space: nowrap;
+      transition: opacity 0.6s;
+    }
+
+    .layer-bar {
+      position: absolute; z-index: 1000;
+      bottom: 14px; left: 14px;
+      display: flex; gap: 6px;
+    }
+    .lbtn {
+      padding: 5px 11px; border-radius: 16px;
+      background: var(--panel); border: 1px solid var(--border);
+      color: var(--text-dim); font-size: 11px; font-weight: 600;
+      cursor: pointer; font-family: var(--font-ui); transition: all 0.2s;
+    }
+    .lbtn.active { background: rgba(74,222,128,0.18); color: var(--green-bright); border-color: rgba(74,222,128,0.5); }
+
+    /* ── SIDEBAR ── */
+    #sidebar {
+      width: 310px; flex-shrink: 0;
+      border-left: 1px solid var(--border);
+      background: var(--panel);
+      display: flex; flex-direction: column;
+      overflow: hidden;
+    }
+
+    .panel-wrap { flex: 1; overflow-y: auto; overflow-x: hidden; }
+    .panel-wrap::-webkit-scrollbar { width: 4px; }
+    .panel-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .pane { display: none; padding: 16px; flex-direction: column; gap: 14px; }
+    .pane.active { display: flex; }
+
+    /* panel header */
+    .pane-header { padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+    .pane-title { font-size: 13px; font-weight: 600; color: var(--green-bright); }
+    .pane-sub { font-size: 10px; color: var(--text-dim); margin-top: 3px; font-family: var(--font-mono); }
+
+    /* gauge */
+    .gauge-card {
+      background: var(--panel2); border: 1px solid var(--border);
+      border-radius: 12px; padding: 16px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+    }
+    .gauge-val { font-size: 36px; font-weight: 600; font-family: var(--font-mono); color: var(--green-bright); }
+    .gauge-bar-bg {
+      width: 100%; height: 8px; border-radius: 4px;
+      background: linear-gradient(to right, #dc2626 0%, #ca8a04 35%, #4ade80 65%, #166534 100%);
+    }
+    .gauge-ptr-row { width: 100%; position: relative; height: 12px; }
+    .gauge-ptr {
+      position: absolute; top: 0; width: 2px; height: 12px;
+      background: var(--text); border-radius: 1px;
+      transform: translateX(-50%); transition: left 0.9s cubic-bezier(.4,0,.2,1);
+    }
+    .gauge-scale { display: flex; justify-content: space-between; width: 100%; font-size: 9px; color: var(--text-dim); font-family: var(--font-mono); }
+
+    /* section label */
+    .sec-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; color: var(--text-dim); text-transform: uppercase; }
+
+    /* legend */
+    .legend { display: flex; flex-direction: column; gap: 5px; }
+    .leg-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-dim); }
+    .leg-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+
+    /* metric grid */
+    .metric-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .metric-card {
+      background: var(--panel2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px;
+    }
+    .metric-label { font-size: 9px; color: var(--text-dim); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 4px; }
+    .metric-val { font-size: 22px; font-weight: 600; font-family: var(--font-mono); color: var(--text); }
+    .metric-unit { font-size: 10px; color: var(--text-dim); }
+
+    /* soil bars */
+    .soil-rows { display: flex; flex-direction: column; gap: 7px; }
+    .soil-row { display: flex; align-items: center; gap: 8px; }
+    .soil-name { width: 52px; font-size: 10px; color: var(--text-dim); flex-shrink: 0; font-family: var(--font-mono); }
+    .soil-track { flex: 1; height: 6px; background: rgba(74,222,128,0.08); border-radius: 3px; overflow: hidden; }
+    .soil-fill { height: 100%; border-radius: 3px; transition: width 0.9s cubic-bezier(.4,0,.2,1); width: 0%; }
+    .soil-pct { width: 30px; text-align: right; font-size: 10px; color: var(--text-dim); font-family: var(--font-mono); }
+
+    /* info box */
+    .info-box {
+      background: var(--panel2); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px;
+      font-size: 11px; color: var(--text-dim); line-height: 1.6;
+    }
+
+    /* rain chart */
+    .rain-chart { display: flex; align-items: flex-end; gap: 5px; height: 90px; }
+    .rain-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; justify-content: flex-end; }
+    .rain-bar {
+      width: 100%; border-radius: 3px 3px 0 0;
+      background: #3b82f6; min-height: 2px;
+      transition: height 0.9s cubic-bezier(.4,0,.2,1);
+    }
+    .rain-lbl { font-size: 8px; color: var(--text-dim); font-family: var(--font-mono); }
+
+    /* temp rows */
+    .temp-rows { display: flex; flex-direction: column; gap: 6px; }
+    .temp-row { display: flex; align-items: center; gap: 8px; }
+    .temp-month { width: 26px; font-size: 9px; color: var(--text-dim); font-family: var(--font-mono); flex-shrink: 0; }
+    .temp-track { flex: 1; height: 5px; background: rgba(74,222,128,0.08); border-radius: 3px; overflow: hidden; }
+    .temp-fill { height: 100%; border-radius: 3px; transition: width 0.9s cubic-bezier(.4,0,.2,1); }
+    .temp-val { width: 34px; text-align: right; font-size: 9px; color: var(--text-dim); font-family: var(--font-mono); }
+
+    /* ext links */
+    .ext-links { display: flex; flex-direction: column; gap: 6px; }
+    .ext-link {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 12px; border-radius: 10px;
+      background: var(--panel2); border: 1px solid var(--border);
+      text-decoration: none; color: var(--text);
+      font-size: 12px; cursor: pointer; transition: background 0.2s;
+    }
+    .ext-link:hover { background: rgba(74,222,128,0.1); border-color: rgba(74,222,128,0.4); }
+    .ext-icon { font-size: 16px; flex-shrink: 0; }
+    .ext-main { font-size: 12px; font-weight: 600; color: var(--text); }
+    .ext-sub { font-size: 10px; color: var(--text-dim); margin-top: 1px; }
+
+    /* status bar at bottom of sidebar */
+    .status-bar {
+      border-top: 1px solid var(--border);
+      padding: 8px 14px;
+      font-size: 10px; color: var(--text-dim);
+      font-family: var(--font-mono);
+      display: flex; align-items: center; gap: 6px;
+      flex-shrink: 0;
+    }
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-dim); flex-shrink: 0; }
+  </style>
+</head>
+<body>
+
+<!-- TOPBAR -->
+<div id="topbar">
+  <div class="logo">🌱 Satélite <span>Agrícola</span></div>
+  <button class="loc-btn" onclick="getMyLocation()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+      <circle cx="12" cy="12" r="8" opacity=".3"/>
+    </svg>
+    Minha localização
+  </button>
+  <div class="tabs">
+    <button class="tab active" onclick="switchPane('ndvi',this)">NDVI</button>
+    <button class="tab" onclick="switchPane('solo',this)">Solo</button>
+    <button class="tab" onclick="switchPane('clima',this)">Clima</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- MAP -->
+  <div id="map-wrap">
+    <div id="map"></div>
+
+    <div class="map-fab">
+      <button class="fab" onclick="map.zoomIn()" title="Zoom +">+</button>
+      <button class="fab" onclick="map.zoomOut()" title="Zoom −">−</button>
+    </div>
+
+    <div class="layer-bar">
+      <button class="lbtn active" onclick="setLayer('sat',this)">Satélite</button>
+      <button class="lbtn" onclick="setLayer('osm',this)">Mapa</button>
+    </div>
+
+    <div class="map-hint" id="map-hint">Clique no mapa para analisar o ponto</div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div id="sidebar">
+    <div class="panel-wrap">
+
+      <!-- NDVI PANE -->
+      <div class="pane active" id="pane-ndvi">
+        <div class="pane-header">
+          <div class="pane-title">Índice NDVI</div>
+          <div class="pane-sub" id="ndvi-loc">Aguardando ponto…</div>
+        </div>
+
+        <div class="gauge-card">
+          <div class="sec-label">NDVI estimado</div>
+          <div class="gauge-val" id="ndvi-val">—</div>
+          <div style="width:100%">
+            <div class="gauge-bar-bg"></div>
+            <div class="gauge-ptr-row">
+              <div class="gauge-ptr" id="gauge-ptr" style="left:50%"></div>
+            </div>
+          </div>
+          <div class="gauge-scale">
+            <span>-1</span><span>-0.5</span><span>0</span><span>+0.5</span><span>+1</span>
+          </div>
+          <div class="pane-sub" id="ndvi-class" style="text-align:center">—</div>
+        </div>
+
+        <div class="sec-label">Referência</div>
+        <div class="legend">
+          <div class="leg-row"><div class="leg-dot" style="background:#dc2626"></div>Abaixo de 0.2 — solo exposto / sem vegetação</div>
+          <div class="leg-row"><div class="leg-dot" style="background:#ca8a04"></div>0.2 – 0.4 — vegetação esparsa / estressada</div>
+          <div class="leg-row"><div class="leg-dot" style="background:#4ade80"></div>0.4 – 0.6 — vegetação moderada</div>
+          <div class="leg-row"><div class="leg-dot" style="background:#166534"></div>Acima de 0.6 — vegetação densa / saudável</div>
+        </div>
+
+        <div class="sec-label">Dados reais de NDVI</div>
+        <div class="ext-links">
+          <a class="ext-link" href="https://browser.dataspace.copernicus.eu/" target="_blank">
+            <span class="ext-icon">🛰</span>
+            <div><div class="ext-main">Copernicus Browser</div><div class="ext-sub">Sentinel-2 — NDVI gratuito</div></div>
+          </a>
+          <a class="ext-link" href="https://www.planet.com/explorer/" target="_blank">
+            <span class="ext-icon">🌍</span>
+            <div><div class="ext-main">Planet Explorer</div><div class="ext-sub">Imagens diárias de alta resolução</div></div>
+          </a>
+        </div>
+      </div>
+
+      <!-- SOLO PANE -->
+      <div class="pane" id="pane-solo">
+        <div class="pane-header">
+          <div class="pane-title">Análise de Solo</div>
+          <div class="pane-sub" id="solo-loc">Aguardando ponto…</div>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">pH</div>
+            <div class="metric-val" id="solo-ph">—</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Umidade</div>
+            <div class="metric-val" id="solo-umid">—</div>
+            <div class="metric-unit">%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Mat. Orgânica</div>
+            <div class="metric-val" id="solo-mo">—</div>
+            <div class="metric-unit">%</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">CTC</div>
+            <div class="metric-val" id="solo-ctc">—</div>
+            <div class="metric-unit">cmol/kg</div>
+          </div>
+        </div>
+
+        <div class="sec-label">Composição textural</div>
+        <div class="soil-rows">
+          <div class="soil-row">
+            <span class="soil-name">Areia</span>
+            <div class="soil-track"><div class="soil-fill" id="bar-areia" style="background:#ca8a04"></div></div>
+            <span class="soil-pct" id="pct-areia">—</span>
+          </div>
+          <div class="soil-row">
+            <span class="soil-name">Silte</span>
+            <div class="soil-track"><div class="soil-fill" id="bar-silte" style="background:#3b82f6"></div></div>
+            <span class="soil-pct" id="pct-silte">—</span>
+          </div>
+          <div class="soil-row">
+            <span class="soil-name">Argila</span>
+            <div class="soil-track"><div class="soil-fill" id="bar-argila" style="background:#8b5cf6"></div></div>
+            <span class="soil-pct" id="pct-argila">—</span>
+          </div>
+        </div>
+
+        <div class="info-box" id="solo-info">
+          Clique em um ponto no mapa para ver análise estimada do solo (baseada em dados SoilGrids / EMBRAPA).
+        </div>
+
+        <div class="sec-label">Dados reais de solo</div>
+        <div class="ext-links">
+          <a class="ext-link" href="https://soilgrids.org/" target="_blank">
+            <span class="ext-icon">🌱</span>
+            <div><div class="ext-main">SoilGrids (ISRIC)</div><div class="ext-sub">Solo global — acesso gratuito</div></div>
+          </a>
+          <a class="ext-link" href="https://www.embrapa.br/solos" target="_blank">
+            <span class="ext-icon">🇧🇷</span>
+            <div><div class="ext-main">EMBRAPA Solos</div><div class="ext-sub">Mapeamento brasileiro</div></div>
+          </a>
+        </div>
+      </div>
+
+      <!-- CLIMA PANE -->
+      <div class="pane" id="pane-clima">
+        <div class="pane-header">
+          <div class="pane-title">Histórico Climático</div>
+          <div class="pane-sub" id="clima-loc">Aguardando ponto…</div>
+        </div>
+
+        <div class="sec-label">Chuva mensal — últimos 6 meses (mm)</div>
+        <div class="rain-chart" id="rain-chart">
+          <div style="font-size:11px;color:var(--text-dim);align-self:center">Selecione um ponto no mapa</div>
+        </div>
+
+        <div class="sec-label">Temperatura média mensal (°C)</div>
+        <div class="temp-rows" id="temp-rows">
+          <div style="font-size:11px;color:var(--text-dim)">Selecione um ponto no mapa</div>
+        </div>
+
+        <div class="metric-grid">
+          <div class="metric-card">
+            <div class="metric-label">Chuva anual est.</div>
+            <div class="metric-val" id="cl-chuva">—</div>
+            <div class="metric-unit">mm/ano</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-label">Temp. média</div>
+            <div class="metric-val" id="cl-temp">—</div>
+            <div class="metric-unit">°C</div>
+          </div>
+        </div>
+
+        <div class="sec-label">Dados reais de clima</div>
+        <div class="ext-links">
+          <a class="ext-link" href="https://power.larc.nasa.gov/data-access-viewer/" target="_blank">
+            <span class="ext-icon">🚀</span>
+            <div><div class="ext-main">NASA POWER</div><div class="ext-sub">Clima agrícola — gratuito</div></div>
+          </a>
+          <a class="ext-link" href="https://climate.copernicus.eu/" target="_blank">
+            <span class="ext-icon">🌦</span>
+            <div><div class="ext-main">Copernicus Climate</div><div class="ext-sub">ERA5 reanalysis histórico</div></div>
+          </a>
+        </div>
+      </div>
+
+    </div><!-- end panel-wrap -->
+
+    <div class="status-bar">
+      <div class="status-dot"></div>
+      <span id="status-text">Pronto — clique no mapa ou use sua localização</span>
+    </div>
+  </div><!-- end sidebar -->
+
+</div><!-- end app -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── MAP INIT ──────────────────────────────────────────
+const map = L.map('map', { center: [-3.73, -38.52], zoom: 11, zoomControl: false });
+
+const layers = {
+  sat: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '© Esri', maxZoom: 19
+  }),
+  osm: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '© OpenStreetMap', maxZoom: 19
+  })
+};
+layers.sat.addTo(map);
+let currentLayer = 'sat';
+
+L.control.scale({ imperial: false }).addTo(map);
+
+// ── LAYERS ────────────────────────────────────────────
+function setLayer(name, btn) {
+  if (currentLayer === name) return;
+  map.removeLayer(layers[currentLayer]);
+  layers[name].addTo(map);
+  currentLayer = name;
+  document.querySelectorAll('.lbtn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── TABS ──────────────────────────────────────────────
+function switchPane(id, btn) {
+  document.querySelectorAll('.pane').forEach(p => p.classList.remove('active'));
+  document.getElementById('pane-' + id).classList.add('active');
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+// ── MARKER ────────────────────────────────────────────
+let marker = null;
+function placeMarker(lat, lng) {
+  if (marker) map.removeLayer(marker);
+  marker = L.circleMarker([lat, lng], {
+    radius: 8, fillColor: '#4ade80', color: '#fff',
+    weight: 2, opacity: 1, fillOpacity: 0.9
+  }).addTo(map);
+  analyzePoint(lat, lng);
+  document.getElementById('map-hint').style.opacity = '0';
+}
+
+map.on('click', e => placeMarker(e.latlng.lat, e.latlng.lng));
+
+// ── GEOLOCATION ───────────────────────────────────────
+function getMyLocation() {
+  if (!navigator.geolocation) {
+    alert('Geolocalização não suportada neste navegador.');
+    return;
+  }
+  document.getElementById('status-text').textContent = 'Obtendo localização GPS…';
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      map.flyTo([lat, lng], 15, { duration: 1.5 });
+      placeMarker(lat, lng);
+      document.getElementById('status-text').textContent =
+        'GPS: ' + lat.toFixed(5) + ', ' + lng.toFixed(5);
+    },
+    err => {
+      let msg = 'Erro de localização.';
+      if (err.code === 1) msg = 'Permissão de localização negada. Libere nas configurações do navegador.';
+      if (err.code === 2) msg = 'Posição não disponível.';
+      if (err.code === 3) msg = 'Tempo esgotado ao obter localização.';
+      alert(msg);
+      document.getElementById('status-text').textContent = msg;
+    },
+    { enableHighAccuracy: true, timeout: 15000 }
+  );
+}
+
+// ── DATA SIMULATION ───────────────────────────────────
+// Generates consistent pseudo-random values per coordinate (deterministic)
+function seed(lat, lng) {
+  const x = Math.sin(lat * 127.1 + lng * 311.7) * 43758.5453;
+  return x - Math.floor(x);
+}
+function rng(lat, lng, offset) {
+  return seed(lat * (1 + offset * 0.01), lng * (1 + offset * 0.02));
+}
+
+const MONTHS = ['Out', 'Nov', 'Dez', 'Jan', 'Fev', 'Mar'];
+
+function analyzePoint(lat, lng) {
+  const s = seed(lat, lng);
+
+  // ── NDVI
+  const ndvi = +((-0.1 + s * 0.8).toFixed(2));
+  const pct = ((ndvi + 1) / 2 * 100).toFixed(1);
+
+  let cls = '';
+  if (ndvi < 0.2) cls = 'Solo exposto / sem vegetação';
+  else if (ndvi < 0.4) cls = 'Vegetação esparsa ou estressada';
+  else if (ndvi < 0.6) cls = 'Vegetação moderada';
+  else cls = 'Vegetação densa e saudável';
+
+  const locStr = lat.toFixed(4) + '°, ' + lng.toFixed(4) + '°';
+  document.getElementById('ndvi-val').textContent = ndvi >= 0 ? '+' + ndvi : '' + ndvi;
+  document.getElementById('gauge-ptr').style.left = pct + '%';
+  document.getElementById('ndvi-class').textContent = cls;
+  document.getElementById('ndvi-loc').textContent = locStr;
+
+  // ── SOLO
+  const ph = (4.5 + rng(lat, lng, 1) * 3.5).toFixed(1);
+  const umid = Math.round(20 + rng(lat, lng, 2) * 60);
+  const mo = (0.5 + rng(lat, lng, 3) * 5.5).toFixed(1);
+  const ctc = (3 + rng(lat, lng, 4) * 27).toFixed(1);
+  const areia = Math.round(20 + rng(lat, lng, 5) * 60);
+  const silte = Math.round(10 + rng(lat, lng, 6) * (90 - areia));
+  const argila = 100 - areia - silte;
+
+  document.getElementById('solo-ph').textContent = ph;
+  document.getElementById('solo-umid').textContent = umid;
+  document.getElementById('solo-mo').textContent = mo;
+  document.getElementById('solo-ctc').textContent = ctc;
+  document.getElementById('bar-areia').style.width = areia + '%';
+  document.getElementById('bar-silte').style.width = silte + '%';
+  document.getElementById('bar-argila').style.width = Math.max(0, argila) + '%';
+  document.getElementById('pct-areia').textContent = areia + '%';
+  document.getElementById('pct-silte').textContent = silte + '%';
+  document.getElementById('pct-argila').textContent = Math.max(0, argila) + '%';
+  document.getElementById('solo-loc').textContent = locStr;
+
+  let soloTipo = 'Solo de textura ';
+  if (argila > 40) soloTipo += 'argilosa. Boa retenção hídrica, pode compactar.';
+  else if (areia > 60) soloTipo += 'arenosa. Boa drenagem, menor retenção de nutrientes.';
+  else soloTipo += 'média (franca). Equilíbrio entre drenagem e retenção.';
+  document.getElementById('solo-info').textContent = soloTipo;
+
+  // ── CLIMA
+  document.getElementById('clima-loc').textContent = locStr;
+  const baseTemp = 18 + rng(lat, lng, 7) * 14;
+  const baseChuva = 30 + rng(lat, lng, 8) * 220;
+
+  const rains = MONTHS.map((m, i) => Math.round(baseChuva * (0.5 + rng(lat, lng, 9 + i) * 1.2)));
+  const temps = MONTHS.map((m, i) => +(baseTemp + rng(lat, lng, 15 + i) * 8 - 2).toFixed(1));
+
+  const maxRain = Math.max(...rains);
+  const rainHTML = MONTHS.map((m, i) => {
+    const h = Math.round((rains[i] / maxRain) * 80);
+    return `<div class="rain-col">
+      <div class="rain-lbl">${rains[i]}</div>
+      <div class="rain-bar" style="height:${h}px"></div>
+      <div class="rain-lbl">${m}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('rain-chart').innerHTML = rainHTML;
+
+  const maxTemp = Math.max(...temps);
+  const tempHTML = MONTHS.map((m, i) => {
+    const w = Math.round((temps[i] / maxTemp) * 100);
+    const hue = Math.round(60 - (temps[i] / maxTemp) * 60);
+    return `<div class="temp-row">
+      <span class="temp-month">${m}</span>
+      <div class="temp-track"><div class="temp-fill" style="width:${w}%;background:hsl(${hue},80%,55%)"></div></div>
+      <span class="temp-val">${temps[i]}°</span>
+    </div>`;
+  }).join('');
+  document.getElementById('temp-rows').innerHTML = tempHTML;
+
+  const totalRain = rains.reduce((a, b) => a + b, 0);
+  const avgTemp = (temps.reduce((a, b) => a + b, 0) / temps.length).toFixed(1);
+  document.getElementById('cl-chuva').textContent = Math.round(totalRain * 2);
+  document.getElementById('cl-temp').textContent = avgTemp;
+
+  document.getElementById('status-text').textContent = 'Ponto analisado: ' + locStr;
+}
+</script>
+</body>
+</html>
